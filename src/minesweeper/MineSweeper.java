@@ -23,8 +23,10 @@ public class MineSweeper
 	private int windowHeight;
 	private int rows;
 	private int cols;
+	private final int SMILEY_AREA_HEIGHT;
+	private final int SMILEY_Y;
 	private int numberMines;
-	private int numberMinesRevealed;
+	private int numberRevealed;
 	private double fractionMines;
 	private BufferedImage background;
 	// This will just be a rectangle, but stored in memory for performance.
@@ -35,7 +37,8 @@ public class MineSweeper
 	private MSPanel panel;
 	
 	private MineSweeperSquare currentSquare;
-	
+	private SmileyState smileyState;
+	private boolean smileyPressed;
 	private HashSet<MineSweeperSquare> checkedBlanks;
 	
 	
@@ -60,11 +63,13 @@ public class MineSweeper
 	
 	public MineSweeper()
 	{
-		rows = 20;
-		cols = 30;
+		rows = 10;
+		cols = 10;
+		SMILEY_Y = 20; // 30 for the smiley icon, 20 for top buffer
+		SMILEY_AREA_HEIGHT = 30 + SMILEY_Y;
 		windowWidth = cols * 20 + 50;
-		windowHeight = rows * 20 + 50;
-		fractionMines = .15;
+		windowHeight = rows * 20 + 50 + SMILEY_AREA_HEIGHT;
+		fractionMines = .15; // Not exactly, as this is over a random variable. See numberMines
 		
 		background = new BufferedImage(windowWidth, windowHeight, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D backgroundG = background.createGraphics();
@@ -106,6 +111,29 @@ public class MineSweeper
 			e.printStackTrace();
 		}
 		
+		newGame();
+		
+		// Put up the window
+		frame = new JFrame();
+		panel = new MSPanel();
+		panel.setPreferredSize(new Dimension(windowWidth,windowHeight));
+		frame.getContentPane().add(panel);
+		frame.pack();
+		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		frame.setVisible(true);
+		
+		// Add the listeners
+		panel.addMouseListener(new MSMouseListener());
+		
+	}
+	
+	public void newGame()
+	{
+		smileyState = SmileyState.NORMAL;
+		smileyPressed = false;
+		numberRevealed = 0;
+		numberMines = 0;
+		
 		// Populate the 2D array "squares"
 		squares = new MineSweeperSquare[rows][cols];
 		int[][] squareNumbers = new int[rows][cols];
@@ -125,12 +153,12 @@ public class MineSweeper
 						}
 					}
 				}
-				
+			
 				squares[i][j].setRow(i);
 				squares[i][j].setCol(j);
 			}
 		}
-		
+				
 		// Apply squareNumbers to the squares
 		for (int i = 0; i < rows; i++) {
 			for (int j = 0; j < cols; j++) {
@@ -140,19 +168,6 @@ public class MineSweeper
 
 		currentSquare = null;
 		checkedBlanks = new HashSet<MineSweeperSquare>();
-		
-		// Put up the window
-		frame = new JFrame();
-		panel = new MSPanel();
-		panel.setPreferredSize(new Dimension(windowWidth,windowHeight));
-		frame.getContentPane().add(panel);
-		frame.pack();
-		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		frame.setVisible(true);
-		
-		// Add the listeners
-		panel.addMouseListener(new MSMouseListener());
-		
 	}
 	
 	/** 
@@ -165,7 +180,6 @@ public class MineSweeper
 			for (int m = j - 1; m <= j + 1; m++) {
 				boolean inBounds = (n >= 0 && m >= 0 && n < rows && m < cols);
 				boolean isOriginal = (n == i && m == j);
-				boolean isDiagonal = (n != i && m != j);
 				boolean hasBeenChecked;
 				if (inBounds) {
 					hasBeenChecked = checkedBlanks.contains(squares[n][m]);
@@ -173,15 +187,23 @@ public class MineSweeper
 					hasBeenChecked = false;
 				}
 				
-				if (inBounds && !isOriginal && !hasBeenChecked && !isDiagonal 
+				if (inBounds && !isOriginal && !hasBeenChecked 
 						&& squares[n][m].getNumber() == 0) {
 					clearRecursiveBlanks(n, m);
 				} else if (isOriginal) {
-					squares[n][m].getSquareProperties().add(SquareProperty.CLEARED);
+					if (squares[n][m].getSquareProperties().add(SquareProperty.CLEARED)) {
+						// This little conditional increments numberRevealed only when
+						// that square has not been revealed before.
+						numberRevealed++;
+					}
 					checkedBlanks.add(squares[n][m]);
 				} else if (inBounds && squares[n][m].getNumber() != 0) {
 					// This is a numbered square adjacent to a blank
-					squares[n][m].getSquareProperties().add(SquareProperty.CLEARED);
+					if (squares[n][m].getSquareProperties().add(SquareProperty.CLEARED)) {
+						// This little conditional increments numberRevealed only when
+						// that square has not been revealed before.
+						numberRevealed++;
+					}
 				}
 			}
 		}
@@ -202,8 +224,24 @@ public class MineSweeper
 			
 			// Paint the area for the square area
 			int squareAreaX = (windowWidth - squareArea.getWidth()) / 2;
-			int squareAreaY = (windowHeight - squareArea.getHeight()) / 2;
+			int squareAreaY = (windowHeight - squareArea.getHeight() + SMILEY_AREA_HEIGHT) / 2;
 			g.drawImage(squareArea,  squareAreaX, squareAreaY, null);
+			
+			// Paint the smiley
+			BufferedImage currentSmiley;
+			switch(smileyState) {
+				case WIN:
+					currentSmiley = winSmiley;
+					break;
+				case LOSE:
+					currentSmiley = loseSmiley;
+					break;
+				default:
+					currentSmiley = smiley;
+					break;
+			}
+					
+			g.drawImage(currentSmiley, (windowWidth - 30)/2, 20, null);
 			
 			// Paint every square
 			for (int i = 0; i < rows; i++) {
@@ -254,40 +292,62 @@ public class MineSweeper
 
 		public void mousePressed(MouseEvent e)
 		{
-			int squareAreaX = (windowWidth - squareArea.getWidth()) / 2;
-			int squareAreaY = (windowHeight - squareArea.getHeight()) / 2;
-			
-			if (e.getX() >= squareAreaX && e.getX() <= (squareAreaX + cols*20) &&
-				e.getY() >= squareAreaY && e.getY() <= (squareAreaY + rows*20)) {
+			boolean inSmileyBounds = e.getX() >= (windowWidth - 30)/2 &&
+					e.getX() <= (windowWidth + 30)/2 &&
+					e.getY() >= SMILEY_Y &&
+					e.getY() <= SMILEY_Y + 30;
 
-				int squareCol = (e.getX() - squareAreaX) / 20;
-				int squareRow = (e.getY() - squareAreaY) / 20;
-				currentSquare = squares[squareRow][squareCol];
-				HashSet<SquareProperty> p = currentSquare.getSquareProperties();
+			if (inSmileyBounds) {
+				// They clicked on the smiley
+				smileyPressed = true;
+			} else {
+				// They clicked on either a square or nothing
+				int squareAreaX = (windowWidth - squareArea.getWidth()) / 2;
+				int squareAreaY = (windowHeight - squareArea.getHeight() + SMILEY_AREA_HEIGHT) / 2;
 				
-				if (e.getButton() == MouseEvent.BUTTON1) {
-					p.add(SquareProperty.PRESSED);
-				} else if (e.getButton() == MouseEvent.BUTTON3) {
-					if (p.contains(SquareProperty.FLAGGED)) {
-						p.remove(SquareProperty.FLAGGED);
-					} else {
-						p.add(SquareProperty.FLAGGED);
+				if (e.getX() >= squareAreaX && e.getX() <= (squareAreaX + cols*20) &&
+					e.getY() >= squareAreaY && e.getY() <= (squareAreaY + rows*20)) {
+	
+					int squareCol = (e.getX() - squareAreaX) / 20;
+					int squareRow = (e.getY() - squareAreaY) / 20;
+					currentSquare = squares[squareRow][squareCol];
+					HashSet<SquareProperty> p = currentSquare.getSquareProperties();
+					
+					if (e.getButton() == MouseEvent.BUTTON1) {
+						p.add(SquareProperty.PRESSED);
+					} else if (e.getButton() == MouseEvent.BUTTON3) {
+						if (p.contains(SquareProperty.FLAGGED)) {
+							p.remove(SquareProperty.FLAGGED);
+						} else {
+							p.add(SquareProperty.FLAGGED);
+						}
 					}
 				}
+	
+				frame.repaint();
 			}
-
-			frame.repaint();
-			
 		}
 
 		public void mouseReleased(MouseEvent e)
 		{
+			boolean inSmileyBounds = e.getX() >= (windowWidth - 30)/2 &&
+					e.getX() <= (windowWidth + 30)/2 &&
+					e.getY() >= SMILEY_Y &&
+					e.getY() <= SMILEY_Y + 30;
+			if (smileyPressed) {
+				if (inSmileyBounds) {
+					// They're not kidding!
+					newGame();
+					frame.repaint();
+				}
+				smileyPressed = false;
+			}
 			if (currentSquare != null && e.getButton() == MouseEvent.BUTTON1) {
 				
 				// Make sure the mouse is still on the square.
 				// If they're not on the square, they presumably did not want to click it!
 				int xLower = (windowWidth - squareArea.getWidth()) / 2 + currentSquare.getCol()*20;
-				int yLower = (windowHeight - squareArea.getHeight()) / 2 + currentSquare.getRow()*20;
+				int yLower = (windowHeight - squareArea.getHeight() + SMILEY_AREA_HEIGHT) / 2 + currentSquare.getRow()*20;
 				int xHigher = xLower + 20;
 				int yHigher = yLower + 20;
 				boolean stillInXBounds = (e.getX() >= xLower && e.getX() <= xHigher);
@@ -299,7 +359,7 @@ public class MineSweeper
 					frame.repaint();
 				} else {
 				
-					// Process the change to make
+					// Something's gotta happen
 				
 					HashSet<SquareProperty> p = currentSquare.getSquareProperties();
 					currentSquare.getSquareProperties().remove(SquareProperty.PRESSED);
@@ -317,13 +377,23 @@ public class MineSweeper
 								}
 							}
 						}
+						smileyState = SmileyState.LOSE;
 					} else {
 						// It is neither blocked nor a mine.
 						if (currentSquare.getNumber() == 0) {
 							clearRecursiveBlanks(currentSquare.getRow(), currentSquare.getCol());
 						} else {
 							p.add(SquareProperty.CLEARED);
+							numberRevealed++;
 						}
+						
+						// Win condition check
+						if (numberRevealed + numberMines == rows*cols) {
+							smileyState = SmileyState.WIN;
+						}
+						
+						System.out.println(numberRevealed + "+" + numberMines);
+						
 						
 					}
 					
@@ -332,6 +402,5 @@ public class MineSweeper
 				}
 			}
 		}
-		
 	}
 }
