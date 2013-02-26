@@ -1,0 +1,9 @@
+# This config file is a simplified INI file.
+# Hashes are comments, blank lines are ignored for readability.
+# No spaces around = signs are allowed.
+# Integers are formatted as-is, i.e. value=24
+# Float values are formatted as-is with required decimal point, i.e. 0.3
+# Strings are formatted with double quotes, i.e. value="Jack Bauer"
+rows=10
+cols=20
+fractionMines=0.15

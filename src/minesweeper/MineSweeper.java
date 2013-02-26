@@ -13,16 +13,22 @@ import java.util.HashSet;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 
 public class MineSweeper
 {
 	// Model, or the game's state
+	private MineSweeperConfig config;
+	// These are populated with populateState() based on config
+	private int rows;
+	private int cols;
+	
 	private MineSweeperSquare[][] squares;
 	private int windowWidth;
 	private int windowHeight;
-	private int rows;
-	private int cols;
 	private final int SMILEY_AREA_HEIGHT;
 	private final int SMILEY_Y;
 	private int numberMines;
@@ -35,17 +41,23 @@ public class MineSweeper
 	// For global use in this class
 	private JFrame frame;
 	private MSPanel panel;
+	private JMenuBar menuBar;
+	private JMenu fileMenu;
+	private JMenuItem fileMenuItem;
 	
 	private MineSweeperSquare currentSquare;
 	private SmileyState smileyState;
-	private boolean smileyPressed;
+	private boolean isSmileyPressed;
 	private HashSet<MineSweeperSquare> checkedBlanks;
 	
 	
 	// Images to be set by the constructor
 	private BufferedImage smiley;
+	private BufferedImage smileyPressed;
 	private BufferedImage winSmiley;
+	private BufferedImage winSmileyPressed;
 	private BufferedImage loseSmiley;
+	private BufferedImage loseSmileyPressed;
 	private BufferedImage cleanImage;
 	private BufferedImage mineImage;
 	private BufferedImage cleanFlaggedImage;
@@ -63,13 +75,13 @@ public class MineSweeper
 	
 	public MineSweeper()
 	{
-		rows = 10;
-		cols = 10;
+		config = new MineSweeperConfig("resources/config.txt");
+		populateState();
+		
 		SMILEY_Y = 20; // 30 for the smiley icon, 20 for top buffer
 		SMILEY_AREA_HEIGHT = 30 + SMILEY_Y;
 		windowWidth = cols * 20 + 50;
 		windowHeight = rows * 20 + 50 + SMILEY_AREA_HEIGHT;
-		fractionMines = .15; // Not exactly, as this is over a random variable. See numberMines
 		
 		background = new BufferedImage(windowWidth, windowHeight, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D backgroundG = background.createGraphics();
@@ -87,10 +99,16 @@ public class MineSweeper
 			Class<? extends MineSweeper> c = this.getClass();
 			smiley = ImageIO.read(
 					new File(c.getResource("resources/smiley.png").getFile()));
+			smileyPressed = ImageIO.read(
+					new File(c.getResource("resources/smileyPressed.png").getFile()));
 			loseSmiley = ImageIO.read(
 					new File(c.getResource("resources/loseSmiley.png").getFile()));
+			loseSmileyPressed = ImageIO.read(
+					new File(c.getResource("resources/loseSmileyPressed.png").getFile()));
 			winSmiley = ImageIO.read(
 					new File(c.getResource("resources/winSmiley.png").getFile()));
+			winSmileyPressed = ImageIO.read(
+					new File(c.getResource("resources/winSmileyPressed.png").getFile()));
 			cleanImage = ImageIO.read(
 					new File(c.getResource("resources/cleanImage.png").getFile()));
 			mineImage = ImageIO.read(
@@ -114,9 +132,16 @@ public class MineSweeper
 		newGame();
 		
 		// Put up the window
+		menuBar = new JMenuBar();
+		fileMenu = new JMenu("File");
+		fileMenuItem = new JMenuItem("Hello Erik!");
+		fileMenu.add(fileMenuItem);
+		menuBar.add(fileMenu);
+		
 		frame = new JFrame();
 		panel = new MSPanel();
 		panel.setPreferredSize(new Dimension(windowWidth,windowHeight));
+		frame.setJMenuBar(menuBar);
 		frame.getContentPane().add(panel);
 		frame.pack();
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -130,7 +155,7 @@ public class MineSweeper
 	public void newGame()
 	{
 		smileyState = SmileyState.NORMAL;
-		smileyPressed = false;
+		isSmileyPressed = false;
 		numberRevealed = 0;
 		numberMines = 0;
 		
@@ -168,6 +193,14 @@ public class MineSweeper
 
 		currentSquare = null;
 		checkedBlanks = new HashSet<MineSweeperSquare>();
+	}
+	
+	private void populateState()
+	{
+		rows = config.rows();
+		cols = config.cols();
+		// Not exact fraction, as this is over a random variable. See numberMines
+		fractionMines = config.fractionMines();
 	}
 	
 	/** 
@@ -231,13 +264,25 @@ public class MineSweeper
 			BufferedImage currentSmiley;
 			switch(smileyState) {
 				case WIN:
-					currentSmiley = winSmiley;
+					if (isSmileyPressed) {
+						currentSmiley = winSmileyPressed;
+					} else {
+						currentSmiley = winSmiley;
+					}
 					break;
 				case LOSE:
-					currentSmiley = loseSmiley;
+					if (isSmileyPressed) {
+						currentSmiley = loseSmileyPressed;
+					} else {
+						currentSmiley = loseSmiley;
+					}
 					break;
 				default:
-					currentSmiley = smiley;
+					if (isSmileyPressed) {
+						currentSmiley = smileyPressed;
+					} else {
+						currentSmiley = smiley;
+					}
 					break;
 			}
 					
@@ -275,20 +320,11 @@ public class MineSweeper
 	
 	public class MSMouseListener implements MouseListener
 	{
-		public void mouseClicked(MouseEvent e)
-		{
-			
-		}
+		public void mouseClicked(MouseEvent e) {}
 
-		public void mouseEntered(MouseEvent arg0)
-		{
-			
-		}
+		public void mouseEntered(MouseEvent e) {}
 
-		public void mouseExited(MouseEvent arg0)
-		{
-			
-		}
+		public void mouseExited(MouseEvent e) {}
 
 		public void mousePressed(MouseEvent e)
 		{
@@ -299,7 +335,7 @@ public class MineSweeper
 
 			if (inSmileyBounds) {
 				// They clicked on the smiley
-				smileyPressed = true;
+				isSmileyPressed = true;
 			} else {
 				// They clicked on either a square or nothing
 				int squareAreaX = (windowWidth - squareArea.getWidth()) / 2;
@@ -323,25 +359,36 @@ public class MineSweeper
 						}
 					}
 				}
-	
-				frame.repaint();
 			}
+			
+			frame.repaint();
 		}
 
 		public void mouseReleased(MouseEvent e)
 		{
+			/*
+			 * The handler for clicking on the smiley (which logically starts a new game)
+			 */
+			
 			boolean inSmileyBounds = e.getX() >= (windowWidth - 30)/2 &&
 					e.getX() <= (windowWidth + 30)/2 &&
 					e.getY() >= SMILEY_Y &&
 					e.getY() <= SMILEY_Y + 30;
-			if (smileyPressed) {
+			if (isSmileyPressed) {
 				if (inSmileyBounds) {
 					// They're not kidding!
 					newGame();
 					frame.repaint();
 				}
-				smileyPressed = false;
+				isSmileyPressed = false;
 			}
+			
+			/*
+			 * The handler for square clicking
+			 * This is only executed if the mouse is released on the same square it
+			 * that was clicked on immediately before.
+			 */
+			
 			if (currentSquare != null && e.getButton() == MouseEvent.BUTTON1) {
 				
 				// Make sure the mouse is still on the square.
@@ -392,15 +439,13 @@ public class MineSweeper
 							smileyState = SmileyState.WIN;
 						}
 						
-						System.out.println(numberRevealed + "+" + numberMines);
-						
 						
 					}
 					
 					currentSquare = null;
 					frame.repaint();
 				}
-			}
+			} // End square clicking handler
 		}
 	}
 }
