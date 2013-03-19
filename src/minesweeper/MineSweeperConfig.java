@@ -36,7 +36,7 @@ public class MineSweeperConfig
 	{
 		String line;
 		while ((line = reader.readLine()) != null) {
-			if (line.startsWith("#") || line.startsWith("\n") || line.startsWith(" ")) {
+			if (line.startsWith("#") || "".equals(line) || line.startsWith(" ") || line.startsWith("\t")) {
 				// The line is either a comment or whitespace. Leave it be.
 			} else {
 				String[] parts = line.split("=");

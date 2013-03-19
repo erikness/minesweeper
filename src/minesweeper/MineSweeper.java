@@ -4,11 +4,13 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
 
 import javax.imageio.ImageIO;
@@ -20,20 +22,20 @@ import javax.swing.JPanel;
 
 public class MineSweeper
 {
-	// Model, or the game's state
+	// Configuration settings
 	private MineSweeperConfig config;
 	// These are populated with populateState() based on config
 	private int rows;
 	private int cols;
+	private double fractionMines;
 	
 	private MineSweeperSquare[][] squares;
 	private int windowWidth;
 	private int windowHeight;
 	private final int SMILEY_AREA_HEIGHT;
 	private final int SMILEY_Y;
-	private int numberMines;
-	private int numberRevealed;
-	private double fractionMines;
+	private int numberOfMines;
+	private int numberOfRevealed;
 	private BufferedImage background;
 	// This will just be a rectangle, but stored in memory for performance.
 	private BufferedImage squareArea; 
@@ -51,20 +53,25 @@ public class MineSweeper
 	private HashSet<MineSweeperSquare> checkedBlanks;
 	
 	
-	// Images to be set by the constructor
-	private BufferedImage smiley;
-	private BufferedImage smileyPressed;
-	private BufferedImage winSmiley;
-	private BufferedImage winSmileyPressed;
-	private BufferedImage loseSmiley;
-	private BufferedImage loseSmileyPressed;
-	private BufferedImage cleanImage;
-	private BufferedImage mineImage;
-	private BufferedImage cleanFlaggedImage;
-	private BufferedImage cleanPressedImage;
-	private BufferedImage cleanFlaggedPressedImage;
-	private BufferedImage empty;
-	private BufferedImage[] numberImages;
+	// Theme settings
+	private MineSweeperTheme theme;
+	// The values below are derived from theme through populateTheme()
+	private Image smiley;
+	private Image smileyPressed;
+	private Image winSmiley;
+	private Image winSmileyPressed;
+	private Image loseSmiley;
+	private Image loseSmileyPressed;
+	private Image cleanImage;
+	private Image mineImage;
+	private Image cleanFlaggedImage;
+	private Image cleanPressedImage;
+	private Image cleanFlaggedPressedImage;
+	private Image empty;
+	private ArrayList<Image> numberImages;
+	
+	private Color backgroundColor;
+	private Color squareAreaColor;
 	
 	public static void main(String[] args)
 	{
@@ -78,56 +85,26 @@ public class MineSweeper
 		config = new MineSweeperConfig("resources/config.txt");
 		populateState();
 		
-		SMILEY_Y = 20; // 30 for the smiley icon, 20 for top buffer
+		theme = new MineSweeperTheme("resources/themes/classic/classic.txt");
+		populateTheme();
+		
+		// 30 for the smiley icon, 20 for top buffer
+		SMILEY_Y = 20;
 		SMILEY_AREA_HEIGHT = 30 + SMILEY_Y;
 		windowWidth = cols * 20 + 50;
 		windowHeight = rows * 20 + 50 + SMILEY_AREA_HEIGHT;
-		
+				
 		background = new BufferedImage(windowWidth, windowHeight, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D backgroundG = background.createGraphics();
-		backgroundG.setColor(new Color(152, 152, 152));
+		backgroundG.setColor(backgroundColor);
 		backgroundG.fillRect(0, 0, windowWidth, windowHeight);
-		
+				
 		squareArea = new BufferedImage(cols * 20, rows * 20, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D squareAreaG = squareArea.createGraphics();
-		squareAreaG.setColor(new Color(76, 76, 76));
+		squareAreaG.setColor(squareAreaColor);
 		squareAreaG.fillRect(0, 0, cols * 20, rows * 20);
-		
+				
 		empty = new BufferedImage(20,20,BufferedImage.TYPE_INT_ARGB);
-		
-		try {
-			Class<? extends MineSweeper> c = this.getClass();
-			smiley = ImageIO.read(
-					new File(c.getResource("resources/smiley.png").getFile()));
-			smileyPressed = ImageIO.read(
-					new File(c.getResource("resources/smileyPressed.png").getFile()));
-			loseSmiley = ImageIO.read(
-					new File(c.getResource("resources/loseSmiley.png").getFile()));
-			loseSmileyPressed = ImageIO.read(
-					new File(c.getResource("resources/loseSmileyPressed.png").getFile()));
-			winSmiley = ImageIO.read(
-					new File(c.getResource("resources/winSmiley.png").getFile()));
-			winSmileyPressed = ImageIO.read(
-					new File(c.getResource("resources/winSmileyPressed.png").getFile()));
-			cleanImage = ImageIO.read(
-					new File(c.getResource("resources/cleanImage.png").getFile()));
-			mineImage = ImageIO.read(
-					new File(c.getResource("resources/mineImage.png").getFile()));
-			cleanFlaggedImage = ImageIO.read(
-					new File(c.getResource("resources/cleanFlaggedImage.png").getFile()));
-			cleanPressedImage = ImageIO.read(
-					new File(c.getResource("resources/cleanPressedImage.png").getFile()));
-			cleanFlaggedPressedImage = ImageIO.read(
-					new File(c.getResource("resources/cleanFlaggedPressedImage.png").getFile()));
-			numberImages = new BufferedImage[9];
-			numberImages[0] = empty;
-			for (int i = 1; i < 9; i++) {
-				numberImages[i] = ImageIO.read(
-						new File(c.getResource("resources/" + i + ".png").getFile()));
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 		
 		newGame();
 		
@@ -156,8 +133,8 @@ public class MineSweeper
 	{
 		smileyState = SmileyState.NORMAL;
 		isSmileyPressed = false;
-		numberRevealed = 0;
-		numberMines = 0;
+		numberOfRevealed = 0;
+		numberOfMines = 0;
 		
 		// Populate the 2D array "squares"
 		squares = new MineSweeperSquare[rows][cols];
@@ -169,7 +146,7 @@ public class MineSweeper
 					squares[i][j] = new MineSweeperSquare(SquareState.CLEAN);
 				} else {
 					squares[i][j] = new MineSweeperSquare(SquareState.MINE);
-					numberMines++;
+					numberOfMines++;
 					for (int n = i - 1; n <= i + 1; n++) {
 						for (int m = j - 1; m <= j + 1; m++) {
 							if (n >= 0 && m >= 0 && n < rows && m < cols) {
@@ -183,6 +160,7 @@ public class MineSweeper
 				squares[i][j].setCol(j);
 			}
 		}
+		
 				
 		// Apply squareNumbers to the squares
 		for (int i = 0; i < rows; i++) {
@@ -199,8 +177,27 @@ public class MineSweeper
 	{
 		rows = config.rows();
 		cols = config.cols();
-		// Not exact fraction, as this is over a random variable. See numberMines
+		// Not exact fraction, as this is over a random variable. See numberOfMines
 		fractionMines = config.fractionMines();
+	}
+	
+	private void populateTheme()
+	{
+		smiley = theme.getImage("smiley");
+		smileyPressed = theme.getImage("smileyPressed");
+		winSmiley = theme.getImage("winSmiley");
+		winSmileyPressed = theme.getImage("winSmileyPressed");
+		loseSmiley = theme.getImage("loseSmiley");
+		loseSmileyPressed = theme.getImage("loseSmileyPressed");
+		cleanImage = theme.getImage("cleanImage");
+		mineImage = theme.getImage("mineImage");
+		cleanFlaggedImage = theme.getImage("cleanFlaggedImage");
+		cleanPressedImage = theme.getImage("cleanPressedImage");
+		cleanFlaggedPressedImage = theme.getImage("cleanFlaggedPressedImage");
+		empty = new BufferedImage(20,20,BufferedImage.TYPE_INT_ARGB);
+		numberImages = theme.getNumberedImages();
+		backgroundColor = theme.getColor("backgroundColor");
+		squareAreaColor = theme.getColor("squareAreaColor");
 	}
 	
 	/** 
@@ -225,17 +222,17 @@ public class MineSweeper
 					clearRecursiveBlanks(n, m);
 				} else if (isOriginal) {
 					if (squares[n][m].getSquareProperties().add(SquareProperty.CLEARED)) {
-						// This little conditional increments numberRevealed only when
+						// This little conditional increments numberOfRevealed only when
 						// that square has not been revealed before.
-						numberRevealed++;
+						numberOfRevealed++;
 					}
 					checkedBlanks.add(squares[n][m]);
 				} else if (inBounds && squares[n][m].getNumber() != 0) {
 					// This is a numbered square adjacent to a blank
 					if (squares[n][m].getSquareProperties().add(SquareProperty.CLEARED)) {
-						// This little conditional increments numberRevealed only when
+						// This little conditional increments numberOfRevealed only when
 						// that square has not been revealed before.
-						numberRevealed++;
+						numberOfRevealed++;
 					}
 				}
 			}
@@ -261,7 +258,7 @@ public class MineSweeper
 			g.drawImage(squareArea,  squareAreaX, squareAreaY, null);
 			
 			// Paint the smiley
-			BufferedImage currentSmiley;
+			Image currentSmiley;
 			switch(smileyState) {
 				case WIN:
 					if (isSmileyPressed) {
@@ -291,14 +288,14 @@ public class MineSweeper
 			// Paint every square
 			for (int i = 0; i < rows; i++) {
 				for (int j = 0; j < cols; j++) {
-					BufferedImage img;
+					Image img;
 					MineSweeperSquare sq = squares[i][j]; // shorthand
 					HashSet<SquareProperty> p = sq.getSquareProperties();
 					
 					if (sq.getSquareState() == SquareState.MINE && p.contains(SquareProperty.CLEARED)) {
 						img = mineImage;
 					} else if (p.contains(SquareProperty.CLEARED)) {
-						img = numberImages[sq.getNumber()];
+						img = numberImages.get(sq.getNumber());
 					} else if (p.contains(SquareProperty.FLAGGED) && p.contains(SquareProperty.PRESSED)) {
 						img = cleanFlaggedPressedImage;
 					} else if (p.contains(SquareProperty.FLAGGED)) {
@@ -378,9 +375,9 @@ public class MineSweeper
 				if (inSmileyBounds) {
 					// They're not kidding!
 					newGame();
-					frame.repaint();
 				}
 				isSmileyPressed = false;
+				frame.repaint();
 			}
 			
 			/*
@@ -431,11 +428,11 @@ public class MineSweeper
 							clearRecursiveBlanks(currentSquare.getRow(), currentSquare.getCol());
 						} else {
 							p.add(SquareProperty.CLEARED);
-							numberRevealed++;
+							numberOfRevealed++;
 						}
 						
 						// Win condition check
-						if (numberRevealed + numberMines == rows*cols) {
+						if (numberOfRevealed + numberOfMines == rows*cols) {
 							smileyState = SmileyState.WIN;
 						}
 						

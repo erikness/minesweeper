@@ -5,5 +5,5 @@
 # Float values are formatted as-is with required decimal point, i.e. 0.3
 # Strings are formatted with double quotes, i.e. value="Jack Bauer"
 rows=10
-cols=20
+cols=10
 fractionMines=0.15

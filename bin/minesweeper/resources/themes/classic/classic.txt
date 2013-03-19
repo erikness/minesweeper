@@ -1,0 +1,18 @@
+# GOD DAMN IT
+numberedImagesExpression="resources/themes/classic/*.png"
+	
+smiley="resources/themes/classic/smiley.png"
+smileyPressed="resources/themes/classic/smileyPressed.png"
+winSmiley="resources/themes/classic/winSmiley.png"
+winSmileyPressed="resources/themes/classic/winSmileyPressed.png"
+loseSmiley="resources/themes/classic/loseSmiley.png"
+loseSmileyPressed="resources/themes/classic/loseSmileyPressed.png"
+
+cleanImage="resources/themes/classic/cleanImage.png"
+mineImage="resources/themes/classic/mineImage.png"
+cleanFlaggedImage="resources/themes/classic/cleanFlaggedImage.png"
+cleanPressedImage="resources/themes/classic/cleanPressedImage.png"
+cleanFlaggedPressedImage="resources/themes/classic/cleanFlaggedPressedImage.png"
+
+backgroundColor=0x989898
+squareAreaColor=0x4c4c4c
